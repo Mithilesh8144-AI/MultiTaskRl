@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(conda env create:*)",
+      "Bash(conda:*)",
+      "Bash(/Users/mithileshr/miniconda3/bin/conda --version)",
+      "Bash(source:*)",
+      "Bash(source ~/.bashrc)",
+      "Bash(source ~/.zshrc)",
+      "Bash(python:*)",
+      "Bash(/opt/anaconda3/envs/mtrl/bin/python:*)",
+      "mcp__serena__list_dir",
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "mcp__serena__find_file",
+      "mcp__serena__get_symbols_overview"
+    ]
+  }
+}

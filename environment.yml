@@ -1,0 +1,14 @@
+name: mtrl
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pytorch>=2.0.0
+  - numpy>=1.24.0
+  - matplotlib>=3.8.0
+  - pip
+  - pip:
+    - gymnasium[box2d]>=0.29.0
+    - tqdm>=4.65.0

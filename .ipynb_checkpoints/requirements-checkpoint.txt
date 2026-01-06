@@ -1,0 +1,22 @@
+# Multi-Task Reinforcement Learning - Dependencies
+# Project: VarShare Experiment on Lunar Lander Variants
+
+# RL Environment Library (replaces old 'gym')
+# [box2d] includes PyBox2D physics engine and pygame for rendering
+gymnasium[box2d]>=0.29.0
+
+# Deep Learning Framework (already installed, but listed for completeness)
+torch>=2.0.0
+
+# Numerical Computing (already installed, but listed for completeness)
+numpy>=1.24.0
+
+# Visualization (already installed, but listed for completeness)
+matplotlib>=3.8.0
+
+# Progress bars for training loops
+tqdm>=4.65.0
+
+# Optional: Enhanced logging and experiment tracking
+# tensorboard>=2.15.0  # Uncomment if you want TensorBoard logging
+# wandb>=0.16.0        # Uncomment if you want Weights & Biases tracking
