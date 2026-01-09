@@ -14,7 +14,12 @@
       "Bash(cat:*)",
       "Bash(python3:*)",
       "mcp__serena__find_file",
-      "mcp__serena__get_symbols_overview"
+      "mcp__serena__get_symbols_overview",
+      "Bash(find:*)",
+      "Bash(pip install:*)",
+      "Bash(rm:*)",
+      "mcp__serena__check_onboarding_performed",
+      "WebSearch"
     ]
   }
 }

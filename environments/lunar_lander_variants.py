@@ -68,10 +68,11 @@ class HeavyWeightLunarLander(LunarLander):
     to use more thrust to control descent and landing.
     """
 
-    def __init__(self, gravity_multiplier=1.5, **kwargs):
+    def __init__(self, gravity_multiplier=1.25, **kwargs):
         """
         Args:
             gravity_multiplier (float): Multiplier for gravity (standard is -10.0)
+                                       Default: 1.25x (updated from 1.5x for stability)
         """
         self.gravity_multiplier = gravity_multiplier
         super().__init__(**kwargs)
@@ -86,6 +87,9 @@ class HeavyWeightLunarLander(LunarLander):
         return result
 
     def step(self, action):
+        # Ensure gravity stays modified throughout episode (Box2D persistence fix)
+        if self.world is not None:
+            self.world.gravity = (0, -10.0 * self.gravity_multiplier)
         return super().step(action)
 
 
