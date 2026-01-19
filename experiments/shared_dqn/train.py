@@ -21,11 +21,11 @@ sys.path.insert(0, str(project_root))
 
 from environments.lunar_lander_variants import make_env
 from agents.shared_dqn import SharedDQNAgent, MultiTaskReplayBuffer
-from config import get_config
+from experiments.shared_dqn.config import get_config
 
 
 def save_shared_metrics(all_episodes, eval_history, best_rewards, config,
-                       total_env_steps, total_gradient_updates):
+                       total_env_steps, total_gradient_updates, output_base):
     """
     Save training metrics in format compatible with analyze_results.py.
 
@@ -36,15 +36,17 @@ def save_shared_metrics(all_episodes, eval_history, best_rewards, config,
         config: Configuration dictionary
         total_env_steps: Total environment steps taken
         total_gradient_updates: Total gradient updates performed
+        output_base: Base output directory path
     """
-    output_dir = project_root / 'results' / 'shared_dqn' / 'logs'
+    output_dir = output_base / 'logs'
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    method_name = 'shared_dqn' if config.get('use_task_embedding', True) else 'shared_dqn_blind'
     metrics = {
-        'method': 'shared_dqn',
+        'method': method_name,
         'total_episodes': len(all_episodes),
         'episodes_per_task': config['num_episodes_per_task'],
-        'parameters': 37788,  # Shared network parameters
+        'parameters': 37788 if config.get('use_task_embedding', True) else 35716,  # Fewer params without embeddings
         'episodes': all_episodes,
         'eval_history': eval_history,
         'best_rewards': best_rewards,
@@ -110,8 +112,12 @@ def train():
     """Train Shared DQN on all 3 tasks simultaneously."""
     # Load configuration
     config = get_config()
+    use_embedding = config.get('use_task_embedding', True)
+    output_dir_name = config.get('output_dir', 'shared_dqn')
+
+    mode_str = "TASK-AWARE" if use_embedding else "TASK-BLIND"
     print(f"\n{'='*80}")
-    print(f"SHARED DQN - MULTI-TASK TRAINING")
+    print(f"SHARED DQN - MULTI-TASK TRAINING ({mode_str})")
     print(f"{'='*80}")
     print(f"Configuration:")
     for key, value in config.items():
@@ -124,7 +130,7 @@ def train():
     print(f"{'='*80}\n")
 
     # Create output directories
-    output_base = project_root / 'results' / 'shared_dqn'
+    output_base = project_root / 'results' / output_dir_name
     (output_base / 'models').mkdir(parents=True, exist_ok=True)
     (output_base / 'logs').mkdir(parents=True, exist_ok=True)
     (output_base / 'plots').mkdir(parents=True, exist_ok=True)
@@ -148,8 +154,11 @@ def train():
         embedding_dim=config['embedding_dim'],
         hidden_dims=config['hidden_dims'],
         learning_rate=config['learning_rate'],
-        gamma=config['gamma']
+        gamma=config['gamma'],
+        use_task_embedding=use_embedding
     )
+    if not use_embedding:
+        print("⚠️  TASK-BLIND MODE: Network has no task embeddings")
 
     # Create shared replay buffer
     replay_buffer = MultiTaskReplayBuffer(config['replay_buffer_size'])
@@ -304,7 +313,7 @@ def train():
     # Save metrics
     save_shared_metrics(
         all_episodes, eval_history, best_rewards, config,
-        total_env_steps, total_gradient_updates
+        total_env_steps, total_gradient_updates, output_base
     )
 
     # Close environments

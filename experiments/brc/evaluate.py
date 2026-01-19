@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 
 from environments.lunar_lander_variants import make_env
 from agents.brc import BRCAgent
-from config import get_config
+from experiments.brc.config import get_config
 
 
 def evaluate_task(agent, task_name, task_id, config, num_episodes=20, render=False):

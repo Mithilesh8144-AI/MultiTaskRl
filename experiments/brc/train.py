@@ -21,7 +21,7 @@ sys.path.insert(0, str(project_root))
 
 from environments.lunar_lander_variants import make_env
 from agents.brc import BRCAgent, MultiTaskReplayBuffer
-from config import get_config
+from .config import get_config
 
 
 def save_brc_metrics(all_episodes, eval_history, best_rewards, config,

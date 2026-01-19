@@ -16,7 +16,7 @@ sys.path.insert(0, str(project_root))
 
 from environments.lunar_lander_variants import make_env
 from agents.shared_dqn import SharedDQNAgent
-from config import get_config
+from experiments.shared_dqn.config import get_config
 
 
 def evaluate_task(agent, task_name, task_id, config, num_episodes=20, render=False):
@@ -100,16 +100,21 @@ def evaluate_all_tasks(model_path=None, num_episodes=20, render=False):
     Evaluate trained Shared DQN agent on all 3 tasks.
 
     Args:
-        model_path: Path to saved model (default: results/shared_dqn/models/best.pth)
+        model_path: Path to saved model (default: uses output_dir from config)
         num_episodes: Number of episodes per task
         render: Whether to render the environment
 
     Returns:
         Dictionary of {task_name: results}
     """
-    # Default model path
+    # Load configuration
+    config = get_config()
+    use_embedding = config.get('use_task_embedding', True)
+    output_dir_name = config.get('output_dir', 'shared_dqn')
+
+    # Default model path based on config
     if model_path is None:
-        model_path = project_root / 'results' / 'shared_dqn' / 'models' / 'best.pth'
+        model_path = project_root / 'results' / output_dir_name / 'models' / 'best.pth'
 
     # Check if model exists
     if not os.path.exists(model_path):
@@ -117,9 +122,6 @@ def evaluate_all_tasks(model_path=None, num_episodes=20, render=False):
         print(f"   Please train the Shared DQN model first using:")
         print(f"   python -m experiments.shared_dqn.train")
         return None
-
-    # Load configuration
-    config = get_config()
 
     # Create agent
     state_dim = 8
@@ -132,12 +134,14 @@ def evaluate_all_tasks(model_path=None, num_episodes=20, render=False):
         embedding_dim=config['embedding_dim'],
         hidden_dims=config['hidden_dims'],
         learning_rate=config['learning_rate'],
-        gamma=config['gamma']
+        gamma=config['gamma'],
+        use_task_embedding=use_embedding
     )
 
     # Load trained model
+    mode_str = "TASK-AWARE" if use_embedding else "TASK-BLIND"
     print(f"\n{'='*60}")
-    print(f"SHARED DQN EVALUATION")
+    print(f"SHARED DQN EVALUATION ({mode_str})")
     print(f"{'='*60}")
     print(f"Loading model from: {model_path}")
     agent.load(str(model_path))
@@ -283,10 +287,12 @@ if __name__ == "__main__":
     else:
         # Evaluate single task
         config = get_config()
+        use_embedding = config.get('use_task_embedding', True)
+        output_dir_name = config.get('output_dir', 'shared_dqn')
         task_to_id = {'standard': 0, 'windy': 1, 'heavy': 2}
 
         # Load agent
-        model_path = args.model if args.model else project_root / 'results' / 'shared_dqn' / 'models' / 'best.pth'
+        model_path = args.model if args.model else project_root / 'results' / output_dir_name / 'models' / 'best.pth'
 
         agent = SharedDQNAgent(
             state_dim=8,
@@ -295,7 +301,8 @@ if __name__ == "__main__":
             embedding_dim=config['embedding_dim'],
             hidden_dims=config['hidden_dims'],
             learning_rate=config['learning_rate'],
-            gamma=config['gamma']
+            gamma=config['gamma'],
+            use_task_embedding=use_embedding
         )
         agent.load(str(model_path))
 

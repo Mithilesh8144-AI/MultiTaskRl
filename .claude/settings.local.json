@@ -19,7 +19,12 @@
       "Bash(pip install:*)",
       "Bash(rm:*)",
       "mcp__serena__check_onboarding_performed",
-      "WebSearch"
+      "WebSearch",
+      "mcp__serena__find_symbol",
+      "mcp__serena__replace_symbol_body",
+      "mcp__serena__initial_instructions",
+      "mcp__serena__list_memories",
+      "mcp__serena__think_about_collected_information"
     ]
   }
 }

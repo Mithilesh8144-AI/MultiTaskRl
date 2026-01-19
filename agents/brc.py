@@ -382,16 +382,28 @@ class BRCAgent:
         l = b.floor().long().clamp(0, self.num_atoms - 1)  # lower index
         u = b.ceil().long().clamp(0, self.num_atoms - 1)   # upper index
 
-        # Distribute probability mass
+        # Vectorized probability distribution using scatter_add
         target_probs = torch.zeros(batch_size, self.num_atoms, device=self.device)
 
-        # Efficient batched projection using scatter_add
-        for i in range(batch_size):
-            for j in range(self.num_atoms):
-                # Lower projection: p_l += p_j * (u - b)
-                target_probs[i, l[i, j]] += next_probs[i, j] * (u[i, j].float() - b[i, j])
-                # Upper projection: p_u += p_j * (b - l)
-                target_probs[i, u[i, j]] += next_probs[i, j] * (b[i, j] - l[i, j].float())
+        # Compute weights for lower and upper projections
+        u_weight = next_probs * (b - l.float())  # weight for upper index
+        l_weight = next_probs * (u.float() - b)  # weight for lower index
+
+        # Scatter add for all batches at once
+        # Create batch indices for scatter_add
+        batch_idx = torch.arange(batch_size, device=self.device).unsqueeze(1).expand(-1, self.num_atoms)
+
+        # Flatten for scatter_add
+        target_probs.view(-1).scatter_add_(
+            0,
+            (batch_idx * self.num_atoms + l).view(-1),
+            l_weight.view(-1)
+        )
+        target_probs.view(-1).scatter_add_(
+            0,
+            (batch_idx * self.num_atoms + u).view(-1),
+            u_weight.view(-1)
+        )
 
         return target_probs
 
@@ -449,12 +461,13 @@ class MultiTaskReplayBuffer:
         """
         batch = random.sample(self.buffer, batch_size)
 
-        states = torch.FloatTensor([t[0] for t in batch]).to(device)
-        actions = torch.LongTensor([t[1] for t in batch]).to(device)
-        rewards = torch.FloatTensor([t[2] for t in batch]).to(device)
-        next_states = torch.FloatTensor([t[3] for t in batch]).to(device)
-        dones = torch.FloatTensor([t[4] for t in batch]).to(device)
-        task_ids = torch.LongTensor([t[5] for t in batch]).to(device)
+        # Convert to numpy arrays first (much faster than list of arrays)
+        states = torch.FloatTensor(np.array([t[0] for t in batch])).to(device)
+        actions = torch.LongTensor(np.array([t[1] for t in batch])).to(device)
+        rewards = torch.FloatTensor(np.array([t[2] for t in batch])).to(device)
+        next_states = torch.FloatTensor(np.array([t[3] for t in batch])).to(device)
+        dones = torch.FloatTensor(np.array([t[4] for t in batch])).to(device)
+        task_ids = torch.LongTensor(np.array([t[5] for t in batch])).to(device)
 
         return states, actions, rewards, next_states, dones, task_ids
 

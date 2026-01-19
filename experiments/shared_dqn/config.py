@@ -37,6 +37,10 @@ SHARED_DQN_CONFIG = {
     # Architecture
     'embedding_dim': 8,               # Task embedding size (moderate capacity)
     'hidden_dims': (256, 128),        # Same as Independent DQN
+    'use_task_embedding': False,      # Set False for task-blind experiment
+
+    # Output
+    'output_dir': 'shared_dqn_blind', # Change to 'shared_dqn_blind' for task-blind
 }
 
 

@@ -46,18 +46,44 @@ def plot_training_curve(task_name: str, experiment_name: str = 'independent_dqn'
 
     Args:
         task_name: Name of the task
-        experiment_name: Name of the experiment
+        experiment_name: Name of the experiment (independent_dqn, shared_dqn, brc, pcgrad)
         smooth_window: Window for smoothing noisy rewards
         save_path: Path to save figure (optional)
     """
-    # Load metrics from new folder structure: results/{task_name}/logs/metrics.json
-    metrics_path = Path(__file__).parent.parent / 'results' / task_name / 'logs' / 'metrics.json'
-    with open(metrics_path, 'r') as f:
-        metrics = json.load(f)
+    project_root = Path(__file__).parent.parent
 
-    episode_rewards = metrics['episode_rewards']
-    eval_rewards = metrics.get('eval_rewards', [])
-    eval_episodes = metrics.get('eval_episodes', [])
+    # Multi-task methods store all tasks in one file
+    multitask_methods = ['shared_dqn', 'brc', 'pcgrad', 'shared_dqn_blind', 'pcgrad_blind']
+
+    if experiment_name in multitask_methods:
+        # Load from multi-task format: results/{method}/logs/metrics.json
+        metrics_path = project_root / 'results' / experiment_name / 'logs' / 'metrics.json'
+        with open(metrics_path, 'r') as f:
+            data = json.load(f)
+
+        # Extract task-specific episodes
+        episode_rewards = [ep['reward'] for ep in data['episodes'] if ep['task'] == task_name]
+
+        # Handle eval_history - could be list of floats or list of dicts
+        raw_eval = data.get('eval_history', {}).get(task_name, [])
+        if raw_eval and isinstance(raw_eval[0], dict):
+            # BRC format: list of {'episode': x, 'reward': y}
+            eval_rewards = [e['reward'] for e in raw_eval]
+            eval_episodes = [e['episode'] // 3 for e in raw_eval]  # Convert global to per-task episodes
+        else:
+            # Shared DQN format: list of floats
+            eval_rewards = raw_eval
+            eval_freq = data.get('config', {}).get('eval_freq', 50)
+            eval_episodes = list(range(eval_freq // 3, len(episode_rewards) + 1, eval_freq // 3))[:len(eval_rewards)]
+    else:
+        # Load metrics from Independent DQN format: results/{task_name}/logs/metrics.json
+        metrics_path = project_root / 'results' / task_name / 'logs' / 'metrics.json'
+        with open(metrics_path, 'r') as f:
+            metrics = json.load(f)
+
+        episode_rewards = metrics['episode_rewards']
+        eval_rewards = metrics.get('eval_rewards', [])
+        eval_episodes = metrics.get('eval_episodes', [])
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
 
@@ -121,25 +147,49 @@ def plot_sample_efficiency(experiments: List[Tuple[str, str]], save_path: Option
         save_path: Path to save figure (optional)
     """
     fig, ax = plt.subplots(figsize=(14, 8))
+    project_root = Path(__file__).parent.parent
 
     colors = plt.cm.tab10(np.linspace(0, 1, len(experiments)))
+    multitask_methods = ['shared_dqn', 'brc', 'pcgrad', 'shared_dqn_blind', 'pcgrad_blind']
+
+    # Cache loaded multi-task data to avoid reloading
+    multitask_cache = {}
 
     for (task_name, experiment_name), color in zip(experiments, colors):
-        # Load metrics from new folder structure: results/{task_name}/logs/metrics.json
-        metrics_path = Path(__file__).parent.parent / 'results' / task_name / 'logs' / 'metrics.json'
-        with open(metrics_path, 'r') as f:
-            metrics = json.load(f)
+        if experiment_name in multitask_methods:
+            # Load from multi-task format (with caching)
+            if experiment_name not in multitask_cache:
+                metrics_path = project_root / 'results' / experiment_name / 'logs' / 'metrics.json'
+                with open(metrics_path, 'r') as f:
+                    multitask_cache[experiment_name] = json.load(f)
 
-        episode_rewards = metrics['episode_rewards']
-        total_steps = metrics.get('total_env_steps', None)
+            data = multitask_cache[experiment_name]
+            episode_rewards = [ep['reward'] for ep in data['episodes'] if ep['task'] == task_name]
+            total_steps = data.get('total_env_steps', None)
 
-        if total_steps is None:
-            print(f"Warning: No total_env_steps found for {experiment_name} on {task_name}")
-            continue
+            if total_steps is None or not episode_rewards:
+                print(f"Warning: No data found for {experiment_name} on {task_name}")
+                continue
 
-        # Compute cumulative steps per episode (approximate)
-        steps_per_episode = total_steps / len(episode_rewards)
-        cumulative_steps = np.arange(1, len(episode_rewards) + 1) * steps_per_episode
+            # Approximate steps per task episode
+            steps_per_episode = total_steps / len(data['episodes'])
+            cumulative_steps = np.arange(1, len(episode_rewards) + 1) * steps_per_episode * 3
+        else:
+            # Load metrics from Independent DQN format: results/{task_name}/logs/metrics.json
+            metrics_path = project_root / 'results' / task_name / 'logs' / 'metrics.json'
+            with open(metrics_path, 'r') as f:
+                metrics = json.load(f)
+
+            episode_rewards = metrics['episode_rewards']
+            total_steps = metrics.get('total_env_steps', None)
+
+            if total_steps is None:
+                print(f"Warning: No total_env_steps found for {experiment_name} on {task_name}")
+                continue
+
+            # Compute cumulative steps per episode (approximate)
+            steps_per_episode = total_steps / len(episode_rewards)
+            cumulative_steps = np.arange(1, len(episode_rewards) + 1) * steps_per_episode
 
         # Smooth rewards
         smoothed_rewards = smooth_curve(episode_rewards, window=20)
@@ -179,15 +229,70 @@ def calculate_sample_efficiency(tasks: List[str], thresholds: List[int] = [50, 1
     Args:
         tasks: List of task names
         thresholds: List of reward thresholds to measure
-        experiment_name: Name of experiment (for reporting)
+        experiment_name: Name of experiment (independent_dqn, shared_dqn, brc, pcgrad)
 
     Returns:
         Dictionary with efficiency metrics per task and threshold
     """
     efficiency_data = {}
+    project_root = Path(__file__).parent.parent
 
+    # Multi-task methods store all tasks in one file
+    multitask_methods = ['shared_dqn', 'brc', 'pcgrad', 'shared_dqn_blind', 'pcgrad_blind']
+
+    if experiment_name in multitask_methods:
+        # Load from multi-task format
+        metrics_path = project_root / 'results' / experiment_name / 'logs' / 'metrics.json'
+        try:
+            with open(metrics_path, 'r') as f:
+                data = json.load(f)
+
+            total_steps = data.get('total_env_steps', None)
+
+            for task in tasks:
+                episode_rewards = [ep['reward'] for ep in data['episodes'] if ep['task'] == task]
+                if not episode_rewards:
+                    efficiency_data[task] = {th: {'episodes': None, 'steps': None, 'reached': False}
+                                            for th in thresholds}
+                    continue
+
+                # Calculate moving average (last 100 episodes)
+                moving_avg = [np.mean(episode_rewards[max(0, i-99):i+1])
+                             for i in range(len(episode_rewards))]
+
+                task_efficiency = {}
+                for threshold in thresholds:
+                    episodes_to_threshold = None
+                    steps_to_threshold = None
+
+                    for i, avg in enumerate(moving_avg):
+                        if avg >= threshold:
+                            episodes_to_threshold = i + 1
+                            if total_steps is not None:
+                                # Approximate steps per task episode
+                                steps_per_episode = total_steps / len(data['episodes'])
+                                steps_to_threshold = int(episodes_to_threshold * steps_per_episode * 3)  # 3 tasks
+                            break
+
+                    task_efficiency[threshold] = {
+                        'episodes': episodes_to_threshold,
+                        'steps': steps_to_threshold,
+                        'reached': episodes_to_threshold is not None
+                    }
+
+                efficiency_data[task] = task_efficiency
+
+        except FileNotFoundError:
+            print(f"Warning: No metrics found for {experiment_name}")
+            for task in tasks:
+                efficiency_data[task] = {th: {'episodes': None, 'steps': None, 'reached': False}
+                                        for th in thresholds}
+
+        return efficiency_data
+
+    # Independent DQN format
     for task in tasks:
-        metrics_path = Path(__file__).parent.parent / 'results' / task / 'logs' / 'metrics.json'
+        metrics_path = project_root / 'results' / task / 'logs' / 'metrics.json'
         try:
             with open(metrics_path, 'r') as f:
                 metrics = json.load(f)
@@ -350,26 +455,46 @@ def plot_conflict_robustness(tasks: List[str], experiment_name: str = 'independe
 
     Args:
         tasks: List of task names (e.g., ['standard', 'windy', 'heavy'])
-        experiment_name: Name of the experiment (for title)
+        experiment_name: Name of the experiment (independent_dqn, shared_dqn, brc, pcgrad)
         save_path: Path to save figure (optional)
     """
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 6))
+    project_root = Path(__file__).parent.parent
 
     # Collect per-task data
     task_rewards = {}
     max_episodes = 0
 
-    for task in tasks:
-        metrics_path = Path(__file__).parent.parent / 'results' / task / 'logs' / 'metrics.json'
+    # Multi-task methods store all tasks in one file
+    multitask_methods = ['shared_dqn', 'brc', 'pcgrad', 'shared_dqn_blind', 'pcgrad_blind']
+
+    if experiment_name in multitask_methods:
+        # Load from multi-task format
+        metrics_path = project_root / 'results' / experiment_name / 'logs' / 'metrics.json'
         try:
             with open(metrics_path, 'r') as f:
-                metrics = json.load(f)
-            episode_rewards = metrics['episode_rewards']
-            task_rewards[task] = episode_rewards
-            max_episodes = max(max_episodes, len(episode_rewards))
+                data = json.load(f)
+
+            for task in tasks:
+                episode_rewards = [ep['reward'] for ep in data['episodes'] if ep['task'] == task]
+                if episode_rewards:
+                    task_rewards[task] = episode_rewards
+                    max_episodes = max(max_episodes, len(episode_rewards))
         except FileNotFoundError:
-            print(f"Warning: No metrics found for {task}")
-            continue
+            print(f"Warning: No metrics found for {experiment_name}")
+    else:
+        # Independent DQN format
+        for task in tasks:
+            metrics_path = project_root / 'results' / task / 'logs' / 'metrics.json'
+            try:
+                with open(metrics_path, 'r') as f:
+                    metrics = json.load(f)
+                episode_rewards = metrics['episode_rewards']
+                task_rewards[task] = episode_rewards
+                max_episodes = max(max_episodes, len(episode_rewards))
+            except FileNotFoundError:
+                print(f"Warning: No metrics found for {task}")
+                continue
 
     if not task_rewards:
         print("Error: No task data found!")

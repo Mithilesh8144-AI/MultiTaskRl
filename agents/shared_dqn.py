@@ -43,7 +43,8 @@ class SharedQNetwork(nn.Module):
     """
 
     def __init__(self, state_dim: int = 8, action_dim: int = 4, num_tasks: int = 3,
-                 embedding_dim: int = 8, hidden_dims: Tuple[int, int] = (256, 128)):
+                 embedding_dim: int = 8, hidden_dims: Tuple[int, int] = (256, 128),
+                 use_task_embedding: bool = True):
         """
         Initialize Shared Q-Network.
 
@@ -53,19 +54,24 @@ class SharedQNetwork(nn.Module):
             num_tasks: Number of tasks (3: standard, windy, heavy)
             embedding_dim: Size of learned task embeddings (8-16 for moderate capacity)
             hidden_dims: Tuple of hidden layer sizes
+            use_task_embedding: If False, network is task-blind (no task conditioning)
         """
         super(SharedQNetwork, self).__init__()
 
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.num_tasks = num_tasks
-        self.embedding_dim = embedding_dim
+        self.embedding_dim = embedding_dim if use_task_embedding else 0
+        self.use_task_embedding = use_task_embedding
 
-        # Learned task embeddings (VarShare-compatible: can evolve to variational posteriors)
-        self.task_embedding = nn.Embedding(num_tasks, embedding_dim)
+        # Learned task embeddings (only if enabled)
+        if use_task_embedding:
+            self.task_embedding = nn.Embedding(num_tasks, embedding_dim)
+        else:
+            self.task_embedding = None
 
         # Shared network (same architecture as Independent DQN)
-        input_dim = state_dim + embedding_dim  # Concatenate state and task embedding
+        input_dim = state_dim + self.embedding_dim  # state only if no embedding
         self.fc1 = nn.Linear(input_dim, hidden_dims[0])
         self.fc2 = nn.Linear(hidden_dims[0], hidden_dims[1])
         self.fc3 = nn.Linear(hidden_dims[1], action_dim)
@@ -90,15 +96,18 @@ class SharedQNetwork(nn.Module):
         Args:
             state: State tensor of shape (batch_size, state_dim)
             task_id: Task ID tensor of shape (batch_size,) with integers [0, 1, 2]
+                     (ignored if use_task_embedding=False)
 
         Returns:
             Q-values for all actions, shape (batch_size, action_dim)
         """
-        # Get task embedding
-        task_emb = self.task_embedding(task_id)  # (batch_size, embedding_dim)
-
-        # Concatenate state and task embedding
-        x = torch.cat([state, task_emb], dim=-1)  # (batch_size, state_dim + embedding_dim)
+        if self.use_task_embedding:
+            # Get task embedding and concatenate with state
+            task_emb = self.task_embedding(task_id)  # (batch_size, embedding_dim)
+            x = torch.cat([state, task_emb], dim=-1)  # (batch_size, state_dim + embedding_dim)
+        else:
+            # Task-blind: use state only
+            x = state
 
         # Forward through shared network
         x = F.relu(self.fc1(x))
@@ -192,7 +201,8 @@ class SharedDQNAgent:
 
     def __init__(self, state_dim: int, action_dim: int, num_tasks: int = 3,
                  embedding_dim: int = 8, hidden_dims: Tuple[int, int] = (256, 128),
-                 learning_rate: float = 5e-4, gamma: float = 0.99, device: str = 'cpu'):
+                 learning_rate: float = 5e-4, gamma: float = 0.99, device: str = 'cpu',
+                 use_task_embedding: bool = True):
         """
         Initialize Shared DQN Agent.
 
@@ -205,21 +215,25 @@ class SharedDQNAgent:
             learning_rate: Adam optimizer learning rate
             gamma: Discount factor
             device: Device for torch tensors ('cpu' or 'cuda')
+            use_task_embedding: If False, network is task-blind (no task conditioning)
         """
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.num_tasks = num_tasks
         self.gamma = gamma
         self.device = device
+        self.use_task_embedding = use_task_embedding
 
         # Single Q-network shared across all tasks
         self.q_network = SharedQNetwork(
-            state_dim, action_dim, num_tasks, embedding_dim, hidden_dims
+            state_dim, action_dim, num_tasks, embedding_dim, hidden_dims,
+            use_task_embedding=use_task_embedding
         ).to(device)
 
         # Target network (for stable Q-learning)
         self.target_network = SharedQNetwork(
-            state_dim, action_dim, num_tasks, embedding_dim, hidden_dims
+            state_dim, action_dim, num_tasks, embedding_dim, hidden_dims,
+            use_task_embedding=use_task_embedding
         ).to(device)
         self.target_network.load_state_dict(self.q_network.state_dict())
 

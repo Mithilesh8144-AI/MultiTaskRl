@@ -7,13 +7,17 @@ Generates all plots and reports for the VarShare project matching preview.webp r
 3. Parameter Efficiency: Performance vs Model Size
 4. Training Curves: Individual task analysis
 
-Supports both Independent DQN and Shared DQN formats.
+Supports Independent DQN, Shared DQN, BRC, PCGrad, and GradNorm formats.
+Also supports task-blind variants: shared_dqn_blind, pcgrad_blind, gradnorm_blind.
 
 Usage:
     python -m experiments.analyze_results                    # All available methods
     python -m experiments.analyze_results --method independent_dqn
     python -m experiments.analyze_results --method shared_dqn
-    python -m experiments.analyze_results --method all       # Compare both
+    python -m experiments.analyze_results --method brc
+    python -m experiments.analyze_results --method pcgrad
+    python -m experiments.analyze_results --method gradnorm
+    python -m experiments.analyze_results --method all       # Compare all
 """
 
 import sys
@@ -57,20 +61,51 @@ def detect_available_methods():
     if shared_metrics.exists():
         methods.append('shared_dqn')
 
+    # Check BRC (single multi-task result)
+    brc_metrics = project_root / 'results' / 'brc' / 'logs' / 'metrics.json'
+    if brc_metrics.exists():
+        methods.append('brc')
+
+    # Check PCGrad (single multi-task result)
+    pcgrad_metrics = project_root / 'results' / 'pcgrad' / 'logs' / 'metrics.json'
+    if pcgrad_metrics.exists():
+        methods.append('pcgrad')
+
+    # Check GradNorm (single multi-task result)
+    gradnorm_metrics = project_root / 'results' / 'gradnorm' / 'logs' / 'metrics.json'
+    if gradnorm_metrics.exists():
+        methods.append('gradnorm')
+
+    # Check task-blind variants
+    shared_blind_metrics = project_root / 'results' / 'shared_dqn_blind' / 'logs' / 'metrics.json'
+    if shared_blind_metrics.exists():
+        methods.append('shared_dqn_blind')
+
+    pcgrad_blind_metrics = project_root / 'results' / 'pcgrad_blind' / 'logs' / 'metrics.json'
+    if pcgrad_blind_metrics.exists():
+        methods.append('pcgrad_blind')
+
+    gradnorm_blind_metrics = project_root / 'results' / 'gradnorm_blind' / 'logs' / 'metrics.json'
+    if gradnorm_blind_metrics.exists():
+        methods.append('gradnorm_blind')
+
     return methods
 
 
-def load_shared_dqn_metrics():
+def load_multitask_metrics(method: str):
     """
-    Load Shared DQN metrics (single file with all tasks).
+    Load multi-task metrics (single file with all tasks).
+
+    Args:
+        method: Method name ('shared_dqn', 'brc', 'pcgrad', etc.)
 
     Returns:
         Dictionary with per-task metrics extracted from the combined file
     """
-    metrics_path = project_root / 'results' / 'shared_dqn' / 'logs' / 'metrics.json'
+    metrics_path = project_root / 'results' / method / 'logs' / 'metrics.json'
 
     if not metrics_path.exists():
-        raise FileNotFoundError(f"Shared DQN metrics not found at {metrics_path}")
+        raise FileNotFoundError(f"{method} metrics not found at {metrics_path}")
 
     with open(metrics_path, 'r') as f:
         data = json.load(f)
@@ -89,18 +124,28 @@ def load_shared_dqn_metrics():
         task_metrics[task]['episode_lengths'].append(episode_data['steps'])
 
     # Add metadata
+    default_params = {
+        'shared_dqn': 37788, 'brc': 459820, 'pcgrad': 37788, 'gradnorm': 37788,
+        'shared_dqn_blind': 35716, 'pcgrad_blind': 35716, 'gradnorm_blind': 35716
+    }
     for task in task_metrics:
-        task_metrics[task]['method'] = 'shared_dqn'
-        task_metrics[task]['parameters'] = data.get('parameters', 37788)
+        task_metrics[task]['method'] = method
+        task_metrics[task]['parameters'] = data.get('parameters', default_params.get(method, 0))
 
     return task_metrics
 
 
+def load_shared_dqn_metrics():
+    """Load Shared DQN metrics (backward compatibility wrapper)."""
+    return load_multitask_metrics('shared_dqn')
+
+
 def count_parameters(task_name: str, method: str = 'independent_dqn') -> int:
     """Count parameters in a trained model."""
-    if method == 'shared_dqn':
-        # Shared DQN has single model for all tasks
-        model_path = project_root / 'results' / 'shared_dqn' / 'models' / 'best.pth'
+    # Multi-task methods have single model for all tasks
+    multitask_methods = ['shared_dqn', 'brc', 'pcgrad', 'gradnorm', 'shared_dqn_blind', 'pcgrad_blind', 'gradnorm_blind']
+    if method in multitask_methods:
+        model_path = project_root / 'results' / method / 'models' / 'best.pth'
     else:
         # Independent DQN has separate models per task
         model_path = project_root / 'results' / task_name / 'models' / 'best.pth'
@@ -241,9 +286,11 @@ def generate_all_plots(method='independent_dqn'):
         experiment_results = []
 
         # Load metrics based on method
-        if method == 'shared_dqn':
-            task_metrics = load_shared_dqn_metrics()
-            param_count = count_parameters('', method='shared_dqn')
+        multitask_methods = ['shared_dqn', 'brc', 'pcgrad', 'gradnorm', 'shared_dqn_blind', 'pcgrad_blind', 'gradnorm_blind']
+        if method in multitask_methods:
+            task_metrics = load_multitask_metrics(method)
+            param_count = count_parameters('', method=method)
+            method_label = method.upper() if method == 'brc' else method.replace('_', ' ').title()
 
             for task in tasks:
                 if task in task_metrics:
@@ -251,7 +298,7 @@ def generate_all_plots(method='independent_dqn'):
                     final_reward = sum(rewards[-100:]) / min(100, len(rewards))
 
                     experiment_results.append({
-                        'name': f'{task.capitalize()} (Shared)',
+                        'name': f'{task.capitalize()} ({method_label})',
                         'task': task,
                         'params': param_count,
                         'performance': final_reward
@@ -319,7 +366,8 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser(description='Analyze RL training results')
     parser.add_argument('--method', type=str, default='auto',
-                        choices=['independent_dqn', 'shared_dqn', 'all', 'auto'],
+                        choices=['independent_dqn', 'shared_dqn', 'brc', 'pcgrad', 'gradnorm',
+                                 'shared_dqn_blind', 'pcgrad_blind', 'gradnorm_blind', 'all', 'auto'],
                         help='Method to analyze (default: auto-detect)')
     args = parser.parse_args()
 

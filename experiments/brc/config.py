@@ -26,28 +26,28 @@ def get_config():
         'replay_buffer_size': 100000,
         'min_replay_size': 2000,           # Match Shared DQN (stability for harder tasks)
 
-        # Network architecture (BroNet)
-        'hidden_dim': 256,                 # Can increase to 512 for more capacity
-        'num_blocks': 3,                   # Number of residual blocks
+        # Network architecture (BroNet) - simplified for stability
+        'hidden_dim': 256,                 # Keep same hidden dim
+        'num_blocks': 2,                   # Reduced from 3 for faster convergence
         'embedding_dim': 32,               # Task embedding size (larger than Shared DQN's 8)
 
-        # Categorical DQN parameters
-        'num_atoms': 51,                   # Standard C51
+        # Categorical DQN parameters - simplified
+        'num_atoms': 21,                   # Reduced from 51 for stability
         'v_min': -100.0,                   # Minimum return (adjust based on env)
         'v_max': 300.0,                    # Maximum return (successful landing ~200-300)
 
         # Optimization
-        'learning_rate': 3e-4,             # Slightly lower than Shared DQN for stability
+        'learning_rate': 2.5e-4,           # Slightly higher for smaller network
         'weight_decay': 1e-4,              # L2 regularization (the "Regularized" part)
         'gamma': 0.99,
 
         # Exploration
         'epsilon_start': 1.0,
         'epsilon_end': 0.01,
-        'epsilon_decay': 0.995,            # Exponential decay per episode
+        'epsilon_decay': 0.997,            # Slower decay for more exploration
 
         # Target network
-        'target_update_freq': 10,          # Update target every 10 episodes
+        'target_update_freq': 5,           # More frequent target updates
 
         # Evaluation
         'eval_freq': 50,                   # Evaluate every 50 episodes
