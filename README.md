@@ -1,7 +1,7 @@
 # Multi-Task Reinforcement Learning: VarShare Experiment
 
 ## Project Overview
-Multi-Task RL experiments comparing different approaches on Lunar Lander variants.
+Multi-Task RL experiments comparing different approaches on Lunar Lander variants. This project evaluates various multi-task learning methods including baselines (Independent DQN, Shared DQN) and state-of-the-art gradient-based optimization techniques (PCGrad, GradNorm) with and without task embeddings.
 
 **Reference:** VarShare Proposal.pdf
 
@@ -9,7 +9,7 @@ Multi-Task RL experiments comparing different approaches on Lunar Lander variant
 
 ## Domain & Tasks
 
-**Base Environment:** Lunar Lander (Gym's LunarLander-v2)
+**Base Environment:** Lunar Lander (Gymnasium's LunarLander-v2)
 
 **Three Task Variants:**
 1. **Standard** - Unchanged baseline
@@ -30,14 +30,18 @@ Multi-Task RL experiments comparing different approaches on Lunar Lander variant
 |--------|-------------|------------|
 | **Independent DQN** | Separate network per task | 35,716 × 3 = 107K |
 | **Shared DQN** | Single network + task embeddings | 37,788 |
-| **BRC** | BroNet + Categorical DQN (51 atoms) | 459,820 |
+| **Shared DQN Blind** | Single network without task embeddings | 35,716 |
 
-### SOTA Optimization (TODO)
-- **PCGrad** - Project conflicting gradients (Priority 1)
-- **GradNorm** - Balance gradient magnitudes (Priority 2)
-- **CAGrad** - Conflict-averse gradient descent (Priority 3)
+### Advanced Methods
+| Method | Description | Parameters |
+|--------|-------------|------------|
+| **BRC** | Bigger, Regularized, Categorical DQN (21 atoms) | 296,884 |
+| **PCGrad** | Project conflicting gradients | 37,788 |
+| **PCGrad Blind** | PCGrad without task embeddings | 35,716 |
+| **GradNorm** | Balance gradient magnitudes with adaptive task weights | 37,791 |
+| **GradNorm Blind** | GradNorm without task embeddings | 35,719 |
 
-### VarShare (Optional)
+### VarShare (Future Work)
 Variational weight adapters: `W_m = θ + φ_m` with KL penalty for automatic sharing vs specialization.
 
 ---
@@ -45,20 +49,34 @@ Variational weight adapters: `W_m = θ + φ_m` with KL penalty for automatic sha
 ## Project Structure
 ```
 /RL
-├── environments/lunar_lander_variants.py
+├── environments/
+│   └── lunar_lander_variants.py
 ├── agents/
-│   ├── dqn.py, shared_dqn.py, brc.py
-│   └── pcgrad.py, gradnorm.py (TODO)
+│   ├── dqn.py              # Independent DQN
+│   ├── shared_dqn.py       # Shared DQN with task embeddings
+│   ├── brc.py              # Bigger, Regularized, Categorical DQN
+│   ├── pcgrad.py           # PCGrad implementation
+│   └── gradnorm.py         # GradNorm implementation
 ├── experiments/
-│   ├── independent_dqn/  (train.py, evaluate.py, config.py)
-│   ├── shared_dqn/       (train.py, evaluate.py, config.py)
-│   └── brc/              (train.py, evaluate.py, config.py)
+│   ├── independent_dqn/    # Independent DQN experiments
+│   ├── shared_dqn/         # Shared DQN experiments
+│   ├── brc/                # BRC experiments
+│   ├── pcgrad/             # PCGrad experiments
+│   ├── gradnorm/           # GradNorm experiments
+│   └── analyze_results.py  # Analysis and comparison tools
 ├── utils/
-│   └── replay_buffer.py, metrics.py, visualize.py
-└── results/
-    ├── standard/, windy/, heavy/  (Independent DQN)
-    ├── shared_dqn/, brc/          (Multi-task methods)
-    └── analysis/                   (Generated plots)
+│   ├── replay_buffer.py    # Experience replay implementations
+│   ├── metrics.py          # Evaluation metrics
+│   ├── visualize.py        # Plotting and visualization
+│   └── plotting.py         # Additional plotting utilities
+├── results/
+│   ├── standard/, windy/, heavy/  # Independent DQN results
+│   ├── shared_dqn/, brc/, pcgrad/, gradnorm/  # Multi-task methods
+│   ├── shared_dqn_blind/, pcgrad_blind/, gradnorm_blind/  # Task-blind versions
+│   └── analysis/           # Generated plots and comparisons
+├── docs/                   # Detailed documentation and analysis
+├── notebooks/              # Jupyter notebooks for exploration
+└── scripts/                # Utility scripts
 ```
 
 ---
@@ -105,28 +123,92 @@ python -m experiments.shared_dqn.evaluate --episodes 20
 python -m experiments.brc.train
 python -m experiments.brc.evaluate --episodes 20
 
+# PCGrad
+python -m experiments.pcgrad.train
+python -m experiments.pcgrad.evaluate --episodes 20
+
+# GradNorm
+python -m experiments.gradnorm.train
+python -m experiments.gradnorm.evaluate --episodes 20
+
 # Analysis
-python -m experiments.analyze_results --method all
-python generate_comparison_plots.py
+python -m experiments.analyze_results
+python -m docs.analysis.comparison_results
 ```
+
+---
+
+## Final Results (Updated: January 19, 2026)
+
+### Complete Results Table
+
+| Method | Standard | Windy | Heavy | **Average** | vs Best Baseline | Params |
+|--------|----------|-------|-------|-------------|------------------|--------|
+| **Baselines** |
+| Independent DQN | 228.0 | 100.0 | 194.0 | **174.0** | -14.2% | 107,148 |
+| Shared DQN | 269.3 | 115.2 | 224.2 | **202.9** | baseline | 37,788 |
+| Shared DQN Blind | 204.8 | 138.4 | 220.1 | **187.7** | -7.5% | 35,716 |
+| **Large Capacity Network** |
+| BRC (8x capacity) | 134.3 | 39.4 | 26.2 | **66.6** | -67.2% | 296,884 |
+| **SOTA with Task Embeddings** |
+| PCGrad | 223.8 | 29.7 | -358.9 | **-35.1** | -117.3% | 37,788 |
+| GradNorm | -140.8 | -5.5 | -57.1 | **-67.8** | -133.4% | 37,788 |
+| **SOTA Task-Blind** |
+| PCGrad Blind | 189.1 | 70.4 | 178.4 | **146.0** | -28.0% | 35,716 |
+| **GradNorm Blind** | **265.7** | **168.8** | **226.6** | **220.3** | **+8.6%** | **35,716** |
+
+### Key Findings
+
+**🏆 Winner:** GradNorm Blind achieved the best overall performance with 220.3 average reward (+8.6% vs Shared DQN baseline)
+
+**Major Insights:**
+1. **Task-blind methods outperformed task-aware methods** for gradient-based optimization
+2. **Simple Shared DQN is a strong baseline** (202.9 average reward)
+3. **Task embeddings hurt SOTA methods** - both PCGrad and GradNorm failed catastrophically with embeddings
+4. **Larger networks don't help** - BRC (297K params) underperformed Shared DQN (38K params) by 3×
+5. **GradNorm's dynamic balancing works best with task-blind networks**
+
+**Method Performance Ranking:**
+1. GradNorm Blind: 220.3 avg reward (winner)
+2. Shared DQN: 202.9 avg reward (strong baseline)
+3. Shared DQN Blind: 187.7 avg reward
+4. Independent DQN: 174.0 avg reward
+5. PCGrad Blind: 146.0 avg reward
+6. BRC: 66.6 avg reward
+7. GradNorm: -67.8 avg reward (failed)
+8. PCGrad: -35.1 avg reward (failed)
 
 ---
 
 ## Current Status
 
-**Phase 4: Advanced Baselines**
+**✅ All Experiments Completed**
 
-| Method | Standard | Windy | Heavy | Avg | Status |
-|--------|----------|-------|-------|-----|--------|
-| Independent DQN | 228 | 100 | 194 | 174 | ✅ Complete |
-| Shared DQN | 263 | 130 | 224 | 206 | ✅ Complete |
-| BRC | - | - | - | - | ⏳ Ready to train |
+| Method | Status | Performance | Notes |
+|--------|--------|-------------|-------|
+| Independent DQN | ✅ Complete | 174.0 avg | Baseline performance |
+| Shared DQN | ✅ Complete | 202.9 avg | Strong baseline |
+| Shared DQN Blind | ✅ Complete | 187.7 avg | Mixed results |
+| BRC | ✅ Complete | 66.6 avg | Failed - overcapacity |
+| PCGrad | ✅ Complete | -35.1 avg | Failed with embeddings |
+| PCGrad Blind | ✅ Complete | 146.0 avg | Underperformed baseline |
+| GradNorm | ✅ Complete | -67.8 avg | Failed with embeddings |
+| GradNorm Blind | ✅ Complete | 220.3 avg | **Winner** |
 
-**Key Finding:** Shared DQN outperformed Independent by +18% (unexpected - multi-task transfer helps)
+**Completed Features:**
+- ✅ All 8 methods implemented and tested
+- ✅ Comprehensive analysis and comparison
+- ✅ Task-aware vs task-blind comparison
+- ✅ Parameter efficiency analysis
+- ✅ Sample efficiency analysis
+- ✅ Training curves and visualizations
+- ✅ Detailed documentation and troubleshooting
 
 **Next Steps:**
-1. Train BRC: `python -m experiments.brc.train`
-2. Implement PCGrad (Priority 1)
+1. Implement VarShare (variational weight adapters)
+2. Test on more dissimilar tasks where task conditioning might help
+3. Try CAGrad (Conflict-Averse Gradient Descent)
+4. Investigate why task embeddings failed so badly for gradient methods
 
 ---
 
@@ -135,6 +217,7 @@ python generate_comparison_plots.py
 1. **Conflict Robustness** - Per-task + average rewards
 2. **Sample Efficiency** - Steps to reach thresholds (50, 100, 150, 200)
 3. **Parameter Efficiency** - Performance vs parameter count
+4. **Training Stability** - Convergence and variance analysis
 
 ---
 
@@ -147,7 +230,13 @@ python generate_comparison_plots.py
 ### Multi-Task Training
 - Round-robin task cycling for Shared DQN/BRC
 - Task embeddings: 8-dim (Shared DQN), 32-dim (BRC)
-- Single shared replay buffer
+- Per-task replay buffers for PCGrad and GradNorm
+
+### Key Discoveries
+- **Task embeddings help simple methods but hurt complex ones**
+- **Per-task buffers are critical for gradient-based methods**
+- **Network capacity is not a substitute for proper multi-task learning**
+- **GradNorm's dynamic balancing works best with task-blind networks**
 
 ---
 
@@ -155,3 +244,5 @@ python generate_comparison_plots.py
 - VarShare Proposal.pdf
 - BRC: "Bigger, Regularized, Categorical" paper
 - PCGrad: "Gradient Surgery for Multi-Task Learning"
+- GradNorm: "Gradient Normalization for Adaptive Loss Balancing"
+- CAGrad: "Conflict-Averse Gradient Descent"
